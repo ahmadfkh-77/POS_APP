@@ -15,7 +15,7 @@ fun MainMenuScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("POS System") }
+                title = { Text("POS System - kanbar diff") }
             )
         }
     ) { paddingValues ->
