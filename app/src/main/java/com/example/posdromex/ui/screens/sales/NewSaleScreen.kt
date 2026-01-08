@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.posdromex.PosApplication
 import com.example.posdromex.data.database.entities.Customer
+import com.example.posdromex.ui.screens.sales.DeliveryInfoInput
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -401,6 +402,99 @@ private fun AddItemDialog(
                 }
             ) {
                 Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun DeliveryInfoDialog(
+    deliveryInfo: DeliveryInfoInput,
+    onDismiss: () -> Unit,
+    onSave: (DeliveryInfoInput) -> Unit
+) {
+    var driverName by remember { mutableStateOf(deliveryInfo.driverName) }
+    var truckPlate by remember { mutableStateOf(deliveryInfo.truckPlate) }
+    var emptyWeight by remember { mutableStateOf(deliveryInfo.emptyWeight) }
+    var fullWeight by remember { mutableStateOf(deliveryInfo.fullWeight) }
+    var deliveryAddress by remember { mutableStateOf(deliveryInfo.deliveryAddress) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Delivery Information")
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = driverName,
+                    onValueChange = { driverName = it },
+                    label = { Text("Driver Name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = truckPlate,
+                    onValueChange = { truckPlate = it },
+                    label = { Text("Truck Plate") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = emptyWeight,
+                    onValueChange = { emptyWeight = it },
+                    label = { Text("Empty Weight") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+
+                OutlinedTextField(
+                    value = fullWeight,
+                    onValueChange = { fullWeight = it },
+                    label = { Text("Full Weight") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+
+                OutlinedTextField(
+                    value = deliveryAddress,
+                    onValueChange = { deliveryAddress = it },
+                    label = { Text("Delivery Address") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    maxLines = 4
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onSave(
+                        DeliveryInfoInput(
+                            driverName = driverName,
+                            truckPlate = truckPlate,
+                            emptyWeight = emptyWeight,
+                            fullWeight = fullWeight,
+                            deliveryAddress = deliveryAddress
+                        )
+                    )
+                }
+            ) {
+                Text("Save")
             }
         },
         dismissButton = {
