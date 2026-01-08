@@ -11,14 +11,14 @@ import androidx.room.PrimaryKey
             entity = Customer::class,
             parentColumns = ["id"],
             childColumns = ["customerId"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = ForeignKey.SET_NULL
         )
     ]
 )
 data class Sale(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-    val customerId: Long,
+    val customerId: Long?,
     val type: String, // "RECEIPT" or "DELIVERY_AUTH"
     val documentNumber: String, // "R-000001" or "DA-000001"
     val date: Long, // timestamp

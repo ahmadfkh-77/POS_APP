@@ -2,10 +2,13 @@ package com.example.posdromex.data.database
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.posdromex.data.database.dao.AppSettingsDao
 import com.example.posdromex.data.database.dao.CategoryDao
 import com.example.posdromex.data.database.dao.ConversionRuleDao
 import com.example.posdromex.data.database.dao.CustomerDao
+import com.example.posdromex.data.database.dao.DeliveryInfoDao
 import com.example.posdromex.data.database.dao.ItemDao
 import com.example.posdromex.data.database.dao.SaleDao
 import com.example.posdromex.data.database.dao.SaleItemDao
@@ -14,6 +17,7 @@ import com.example.posdromex.data.database.entities.AppSettings
 import com.example.posdromex.data.database.entities.Category
 import com.example.posdromex.data.database.entities.ConversionRule
 import com.example.posdromex.data.database.entities.Customer
+import com.example.posdromex.data.database.entities.DeliveryInfo
 import com.example.posdromex.data.database.entities.Item
 import com.example.posdromex.data.database.entities.Sale
 import com.example.posdromex.data.database.entities.SaleItem
@@ -28,9 +32,10 @@ import com.example.posdromex.data.database.entities.Unit
         Item::class,
         Unit::class,
         ConversionRule::class,
-        AppSettings::class
+        AppSettings::class,
+        DeliveryInfo::class
     ],
-    version = 2,
+    version = 4,
     exportSchema = false
 )
 abstract class PosDatabase : RoomDatabase() {
@@ -42,9 +47,38 @@ abstract class PosDatabase : RoomDatabase() {
     abstract fun unitDao(): UnitDao
     abstract fun conversionRuleDao(): ConversionRuleDao
     abstract fun appSettingsDao(): AppSettingsDao
+    abstract fun deliveryInfoDao(): DeliveryInfoDao
 
     companion object {
         const val DATABASE_NAME = "pos_database"
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Create delivery_info table
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS delivery_info (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        saleId INTEGER NOT NULL,
+                        driverName TEXT NOT NULL DEFAULT '',
+                        truckPlate TEXT NOT NULL DEFAULT '',
+                        emptyWeight REAL NOT NULL DEFAULT 0.0,
+                        fullWeight REAL NOT NULL DEFAULT 0.0,
+                        deliveryAddress TEXT NOT NULL DEFAULT '',
+                        FOREIGN KEY(saleId) REFERENCES sales(id) ON DELETE CASCADE
+                    )
+                """)
+
+                // Create unique index for saleId
+                db.execSQL("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS index_delivery_info_saleId
+                    ON delivery_info(saleId)
+                """)
+
+                // Add new columns to app_settings
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN googleAccountEmail TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN backupFrequencyHours INTEGER NOT NULL DEFAULT 24")
+            }
+        }
     }
 }
 

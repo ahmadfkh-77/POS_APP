@@ -20,7 +20,8 @@ class PosApplication : Application() {
             PosDatabase::class.java,
             PosDatabase.DATABASE_NAME
         )
-            .fallbackToDestructiveMigration() // For development - clears DB on schema change
+            .addMigrations(PosDatabase.MIGRATION_3_4)
+            .fallbackToDestructiveMigration() // Fallback for older versions
             .build()
     }
 

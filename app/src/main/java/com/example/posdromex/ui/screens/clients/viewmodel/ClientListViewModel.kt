@@ -7,6 +7,7 @@ import com.example.posdromex.data.database.PosDatabase
 import com.example.posdromex.data.database.entities.Customer
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 class ClientListViewModel(
     database: PosDatabase
@@ -19,6 +20,18 @@ class ClientListViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    fun addCustomer(name: String, phone: String?, address: String?, notes: String?) {
+        viewModelScope.launch {
+            val customer = Customer(
+                name = name,
+                phone = phone?.takeIf { it.isNotBlank() },
+                address = address?.takeIf { it.isNotBlank() },
+                notes = notes?.takeIf { it.isNotBlank() }
+            )
+            customerDao.insertCustomer(customer)
+        }
+    }
 }
 
 class ClientListViewModelFactory(

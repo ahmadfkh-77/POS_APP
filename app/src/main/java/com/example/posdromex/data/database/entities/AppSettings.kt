@@ -32,5 +32,7 @@ data class AppSettings(
     // Backup Settings
     val autoBackupEnabled: Boolean = true,
     val backupRetentionDays: Int = 14,
-    val lastBackupDate: Long = 0
+    val lastBackupDate: Long = 0,
+    val googleAccountEmail: String? = null,
+    val backupFrequencyHours: Int = 24
 )

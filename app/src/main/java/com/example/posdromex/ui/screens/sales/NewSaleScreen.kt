@@ -3,10 +3,13 @@ package com.example.posdromex.ui.screens.sales
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material3.*
@@ -14,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.posdromex.PosApplication
@@ -30,6 +34,7 @@ fun NewSaleScreen(
             PosApplication.instance.database.itemDao(),
             PosApplication.instance.database.saleDao(),
             PosApplication.instance.database.saleItemDao(),
+            PosApplication.instance.database.deliveryInfoDao(),
             PosApplication.instance.database.appSettingsDao(),
             PosApplication.instance.printerService,
             PosApplication.instance.receiptPrinter
@@ -40,10 +45,13 @@ fun NewSaleScreen(
     val items by viewModel.items.collectAsState()
     val selectedCustomer by viewModel.selectedCustomer.collectAsState()
     val cartItems by viewModel.cartItems.collectAsState()
+    val deliveryInfo by viewModel.deliveryInfo.collectAsState()
+    val printBothDocuments by viewModel.printBothDocuments.collectAsState()
     val message by viewModel.message.collectAsState()
 
     var showCustomerDialog by remember { mutableStateOf(false) }
     var showAddItemDialog by remember { mutableStateOf(false) }
+    var showDeliveryInfoDialog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val printerConnected = PosApplication.instance.printerService.isConnected()
@@ -73,6 +81,25 @@ fun NewSaleScreen(
                 shadowElevation = 8.dp
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
+                    // Combined print toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Print Receipt + Delivery Auth",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Switch(
+                            checked = printBothDocuments,
+                            onCheckedChange = { viewModel.togglePrintBothDocuments() },
+                            enabled = deliveryInfo.hasData()
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     // Total
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -90,13 +117,19 @@ fun NewSaleScreen(
 
                     // Print button
                     Button(
-                        onClick = { viewModel.printReceipt() },
+                        onClick = { viewModel.printSale() },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = printerConnected && cartItems.isNotEmpty()
                     ) {
                         Icon(Icons.Default.Print, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text(if (printerConnected) "Print Receipt" else "Printer Not Connected")
+                        Text(
+                            when {
+                                !printerConnected -> "Printer Not Connected"
+                                printBothDocuments && deliveryInfo.hasData() -> "Print Receipt + Delivery"
+                                else -> "Print Receipt"
+                            }
+                        )
                     }
                 }
             }
@@ -135,6 +168,41 @@ fun NewSaleScreen(
                             selectedCustomer?.phone?.let {
                                 Text(it, style = MaterialTheme.typography.bodySmall)
                             }
+                        }
+                    }
+                }
+            }
+
+            // Delivery info card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { showDeliveryInfoDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.LocalShipping, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                if (deliveryInfo.hasData()) "Delivery Info" else "Add Delivery Info (Optional)",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            if (deliveryInfo.hasData()) {
+                                if (deliveryInfo.driverName.isNotBlank()) {
+                                    Text("Driver: ${deliveryInfo.driverName}", style = MaterialTheme.typography.bodySmall)
+                                }
+                                if (deliveryInfo.truckPlate.isNotBlank()) {
+                                    Text("Truck: ${deliveryInfo.truckPlate}", style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                        if (deliveryInfo.hasData()) {
+                            Icon(Icons.Default.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
@@ -227,6 +295,18 @@ fun NewSaleScreen(
             onAdd = { name, qty, unit, price ->
                 viewModel.addManualItem(name, qty, unit, price)
                 showAddItemDialog = false
+            }
+        )
+    }
+
+    // Delivery info dialog
+    if (showDeliveryInfoDialog) {
+        DeliveryInfoDialog(
+            deliveryInfo = deliveryInfo,
+            onDismiss = { showDeliveryInfoDialog = false },
+            onSave = { info ->
+                viewModel.updateDeliveryInfo(info)
+                showDeliveryInfoDialog = false
             }
         )
     }

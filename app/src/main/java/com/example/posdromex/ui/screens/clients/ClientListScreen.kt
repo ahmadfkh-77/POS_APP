@@ -11,6 +11,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -30,6 +33,7 @@ fun ClientListScreen(
     )
 ) {
     val customers by viewModel.customers.collectAsState(initial = emptyList())
+    var showAddClientDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -44,7 +48,7 @@ fun ClientListScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { /* TODO: Add new client */ }
+                onClick = { showAddClientDialog = true }
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Client")
             }
@@ -76,6 +80,77 @@ fun ClientListScreen(
             }
         }
     }
+
+    if (showAddClientDialog) {
+        AddClientDialog(
+            onDismiss = { showAddClientDialog = false },
+            onAdd = { name, phone, address, notes ->
+                viewModel.addCustomer(name, phone, address, notes)
+                showAddClientDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun AddClientDialog(
+    onDismiss: () -> Unit,
+    onAdd: (name: String, phone: String?, address: String?, notes: String?) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Client") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name *") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { phone = it },
+                    label = { Text("Phone") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = address,
+                    onValueChange = { address = it },
+                    label = { Text("Address") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Notes") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (name.isNotBlank()) {
+                        onAdd(name, phone, address, notes)
+                    }
+                },
+                enabled = name.isNotBlank()
+            ) {
+                Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable

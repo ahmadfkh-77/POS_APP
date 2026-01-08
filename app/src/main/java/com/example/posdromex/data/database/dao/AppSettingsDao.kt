@@ -30,4 +30,19 @@ interface AppSettingsDao {
 
     @Query("UPDATE app_settings SET printerMacAddress = :macAddress, printerName = :name WHERE id = 1")
     suspend fun updatePrinter(macAddress: String, name: String)
+
+    @Query("UPDATE app_settings SET lastBackupDate = :timestamp WHERE id = 1")
+    suspend fun updateLastBackupDate(timestamp: Long)
+
+    @Query("UPDATE app_settings SET googleAccountEmail = :email WHERE id = 1")
+    suspend fun updateGoogleAccount(email: String?)
+
+    @Query("UPDATE app_settings SET autoBackupEnabled = :enabled WHERE id = 1")
+    suspend fun updateAutoBackupEnabled(enabled: Boolean)
+
+    @Query("UPDATE app_settings SET backupFrequencyHours = :hours WHERE id = 1")
+    suspend fun updateBackupFrequency(hours: Int)
+
+    @Query("UPDATE app_settings SET backupRetentionDays = :days WHERE id = 1")
+    suspend fun updateBackupRetention(days: Int)
 }
