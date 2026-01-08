@@ -1,0 +1,332 @@
+package com.example.posdromex.ui.screens.sales
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Print
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.posdromex.PosApplication
+import com.example.posdromex.data.database.entities.Customer
+import java.util.Locale
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NewSaleScreen(
+    onNavigateBack: () -> Unit,
+    viewModel: NewSaleViewModel = viewModel(
+        factory = NewSaleViewModelFactory(
+            PosApplication.instance.database.customerDao(),
+            PosApplication.instance.database.itemDao(),
+            PosApplication.instance.database.saleDao(),
+            PosApplication.instance.database.saleItemDao(),
+            PosApplication.instance.database.appSettingsDao(),
+            PosApplication.instance.printerService,
+            PosApplication.instance.receiptPrinter
+        )
+    )
+) {
+    val customers by viewModel.customers.collectAsState()
+    val items by viewModel.items.collectAsState()
+    val selectedCustomer by viewModel.selectedCustomer.collectAsState()
+    val cartItems by viewModel.cartItems.collectAsState()
+    val message by viewModel.message.collectAsState()
+
+    var showCustomerDialog by remember { mutableStateOf(false) }
+    var showAddItemDialog by remember { mutableStateOf(false) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val printerConnected = PosApplication.instance.printerService.isConnected()
+
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearMessage()
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("New Sale") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shadowElevation = 8.dp
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // Total
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("TOTAL", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            String.format(Locale.US, "$%.2f", viewModel.subtotal),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Print button
+                    Button(
+                        onClick = { viewModel.printReceipt() },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = printerConnected && cartItems.isNotEmpty()
+                    ) {
+                        Icon(Icons.Default.Print, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (printerConnected) "Print Receipt" else "Printer Not Connected")
+                    }
+                }
+            }
+        }
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // Customer selection
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { showCustomerDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Person, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                selectedCustomer?.name ?: "Select Customer (Optional)",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            selectedCustomer?.phone?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Add item button
+            item {
+                OutlinedButton(
+                    onClick = { showAddItemDialog = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Add Item")
+                }
+            }
+
+            // Cart items
+            if (cartItems.isEmpty()) {
+                item {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            "No items added yet",
+                            modifier = Modifier.padding(32.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            itemsIndexed(cartItems) { index, cartItem ->
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                cartItem.name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                "${cartItem.quantity} ${cartItem.unit} @ $${String.format(Locale.US, "%.2f", cartItem.unitPrice)}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Text(
+                            String.format(Locale.US, "$%.2f", cartItem.total),
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        IconButton(onClick = { viewModel.removeFromCart(index) }) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Remove",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(100.dp))
+            }
+        }
+    }
+
+    // Customer selection dialog
+    if (showCustomerDialog) {
+        CustomerSelectionDialog(
+            customers = customers,
+            onDismiss = { showCustomerDialog = false },
+            onSelect = { customer ->
+                viewModel.selectCustomer(customer)
+                showCustomerDialog = false
+            }
+        )
+    }
+
+    // Add item dialog
+    if (showAddItemDialog) {
+        AddItemDialog(
+            onDismiss = { showAddItemDialog = false },
+            onAdd = { name, qty, unit, price ->
+                viewModel.addManualItem(name, qty, unit, price)
+                showAddItemDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun CustomerSelectionDialog(
+    customers: List<Customer>,
+    onDismiss: () -> Unit,
+    onSelect: (Customer) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select Customer") },
+        text = {
+            LazyColumn {
+                if (customers.isEmpty()) {
+                    item {
+                        Text("No customers found. Add customers first.")
+                    }
+                }
+                items(customers.size) { index ->
+                    val customer = customers[index]
+                    TextButton(
+                        onClick = { onSelect(customer) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(customer.name, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun AddItemDialog(
+    onDismiss: () -> Unit,
+    onAdd: (name: String, quantity: Double, unit: String, price: Double) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var quantity by remember { mutableStateOf("1") }
+    var unit by remember { mutableStateOf("kg") }
+    var price by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Item") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Item Name") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = quantity,
+                        onValueChange = { quantity = it },
+                        label = { Text("Qty") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = unit,
+                        onValueChange = { unit = it },
+                        label = { Text("Unit") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                OutlinedTextField(
+                    value = price,
+                    onValueChange = { price = it },
+                    label = { Text("Unit Price") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val qty = quantity.toDoubleOrNull() ?: 1.0
+                    val prc = price.toDoubleOrNull() ?: 0.0
+                    if (name.isNotBlank()) {
+                        onAdd(name, qty, unit, prc)
+                    }
+                }
+            ) {
+                Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
