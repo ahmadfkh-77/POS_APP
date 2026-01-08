@@ -132,7 +132,7 @@ class NewSaleViewModel(
                 status = "CASH"
             )
 
-            val saleId = saleDao.insert(sale)
+            val saleId = saleDao.insertSale(sale)
 
             // Create sale items
             val saleItems = cartList.map { cartItem ->
