@@ -9,18 +9,22 @@ import com.example.posdromex.data.database.dao.CategoryDao
 import com.example.posdromex.data.database.dao.ConversionRuleDao
 import com.example.posdromex.data.database.dao.CustomerDao
 import com.example.posdromex.data.database.dao.DeliveryInfoDao
+import com.example.posdromex.data.database.dao.DriverDao
 import com.example.posdromex.data.database.dao.ItemDao
 import com.example.posdromex.data.database.dao.SaleDao
 import com.example.posdromex.data.database.dao.SaleItemDao
+import com.example.posdromex.data.database.dao.TruckDao
 import com.example.posdromex.data.database.dao.UnitDao
 import com.example.posdromex.data.database.entities.AppSettings
 import com.example.posdromex.data.database.entities.Category
 import com.example.posdromex.data.database.entities.ConversionRule
 import com.example.posdromex.data.database.entities.Customer
 import com.example.posdromex.data.database.entities.DeliveryInfo
+import com.example.posdromex.data.database.entities.Driver
 import com.example.posdromex.data.database.entities.Item
 import com.example.posdromex.data.database.entities.Sale
 import com.example.posdromex.data.database.entities.SaleItem
+import com.example.posdromex.data.database.entities.Truck
 import com.example.posdromex.data.database.entities.Unit
 
 @Database(
@@ -33,9 +37,11 @@ import com.example.posdromex.data.database.entities.Unit
         Unit::class,
         ConversionRule::class,
         AppSettings::class,
-        DeliveryInfo::class
+        DeliveryInfo::class,
+        Driver::class,
+        Truck::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class PosDatabase : RoomDatabase() {
@@ -48,6 +54,8 @@ abstract class PosDatabase : RoomDatabase() {
     abstract fun conversionRuleDao(): ConversionRuleDao
     abstract fun appSettingsDao(): AppSettingsDao
     abstract fun deliveryInfoDao(): DeliveryInfoDao
+    abstract fun driverDao(): DriverDao
+    abstract fun truckDao(): TruckDao
 
     companion object {
         const val DATABASE_NAME = "pos_database"
@@ -77,6 +85,32 @@ abstract class PosDatabase : RoomDatabase() {
                 // Add new columns to app_settings
                 db.execSQL("ALTER TABLE app_settings ADD COLUMN googleAccountEmail TEXT DEFAULT NULL")
                 db.execSQL("ALTER TABLE app_settings ADD COLUMN backupFrequencyHours INTEGER NOT NULL DEFAULT 24")
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Create drivers table
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS drivers (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT NOT NULL,
+                        isActive INTEGER NOT NULL DEFAULT 1
+                    )
+                """)
+
+                // Create trucks table
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS trucks (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        plateNumber TEXT NOT NULL,
+                        description TEXT DEFAULT NULL,
+                        isActive INTEGER NOT NULL DEFAULT 1
+                    )
+                """)
+
+                // Add defaultTaxRate column to app_settings
+                db.execSQL("ALTER TABLE app_settings ADD COLUMN defaultTaxRate REAL NOT NULL DEFAULT 0.0")
             }
         }
     }

@@ -7,12 +7,18 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.posdromex.ui.screens.categories.CategoriesScreen
 import com.example.posdromex.ui.screens.clients.ClientListScreen
 import com.example.posdromex.ui.screens.clients.ClientProfileScreen
+import com.example.posdromex.ui.screens.conversions.ConversionsScreen
+import com.example.posdromex.ui.screens.drivers.DriversScreen
+import com.example.posdromex.ui.screens.items.ItemsScreen
 import com.example.posdromex.ui.screens.main.MainMenuScreen
 import com.example.posdromex.ui.screens.quickprint.QuickTextPrintScreen
 import com.example.posdromex.ui.screens.sales.NewSaleScreen
 import com.example.posdromex.ui.screens.settings.SettingsScreen
+import com.example.posdromex.ui.screens.tax.TaxSettingsScreen
+import com.example.posdromex.ui.screens.trucks.TrucksScreen
 
 sealed class Screen(val route: String) {
     object MainMenu : Screen("main_menu")
@@ -20,6 +26,12 @@ sealed class Screen(val route: String) {
     object NewSale : Screen("new_sale")
     object QuickTextPrint : Screen("quick_text_print")
     object Settings : Screen("settings")
+    object Drivers : Screen("drivers")
+    object Trucks : Screen("trucks")
+    object Categories : Screen("categories")
+    object Items : Screen("items")
+    object TaxSettings : Screen("tax_settings")
+    object Conversions : Screen("conversions")
     data class ClientProfile(val customerId: Long = -1) : Screen("client_profile/{customerId}") {
         fun createRoute(customerId: Long) = "client_profile/$customerId"
     }
@@ -47,6 +59,24 @@ fun NavGraph(
                 },
                 onNavigateToSettings = {
                     navController.navigate(Screen.Settings.route)
+                },
+                onNavigateToDrivers = {
+                    navController.navigate(Screen.Drivers.route)
+                },
+                onNavigateToTrucks = {
+                    navController.navigate(Screen.Trucks.route)
+                },
+                onNavigateToCategories = {
+                    navController.navigate(Screen.Categories.route)
+                },
+                onNavigateToItems = {
+                    navController.navigate(Screen.Items.route)
+                },
+                onNavigateToTaxSettings = {
+                    navController.navigate(Screen.TaxSettings.route)
+                },
+                onNavigateToConversions = {
+                    navController.navigate(Screen.Conversions.route)
                 }
             )
         }
@@ -89,6 +119,42 @@ fun NavGraph(
 
         composable(Screen.Settings.route) {
             SettingsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Drivers.route) {
+            DriversScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Trucks.route) {
+            TrucksScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Categories.route) {
+            CategoriesScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Items.route) {
+            ItemsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.TaxSettings.route) {
+            TaxSettingsScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.Conversions.route) {
+            ConversionsScreen(
                 onNavigateBack = { navController.popBackStack() }
             )
         }

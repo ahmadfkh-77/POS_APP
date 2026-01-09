@@ -4,17 +4,25 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.posdromex.data.database.dao.AppSettingsDao
+import com.example.posdromex.data.database.dao.CategoryDao
+import com.example.posdromex.data.database.dao.ConversionRuleDao
 import com.example.posdromex.data.database.dao.CustomerDao
 import com.example.posdromex.data.database.dao.DeliveryInfoDao
+import com.example.posdromex.data.database.dao.DriverDao
 import com.example.posdromex.data.database.dao.ItemDao
 import com.example.posdromex.data.database.dao.SaleDao
 import com.example.posdromex.data.database.dao.SaleItemDao
+import com.example.posdromex.data.database.dao.TruckDao
 import com.example.posdromex.data.database.entities.AppSettings
+import com.example.posdromex.data.database.entities.Category
+import com.example.posdromex.data.database.entities.ConversionRule
 import com.example.posdromex.data.database.entities.Customer
 import com.example.posdromex.data.database.entities.DeliveryInfo
+import com.example.posdromex.data.database.entities.Driver
 import com.example.posdromex.data.database.entities.Item
 import com.example.posdromex.data.database.entities.Sale
 import com.example.posdromex.data.database.entities.SaleItem
+import com.example.posdromex.data.database.entities.Truck
 import com.example.posdromex.printer.BluetoothPrinterService
 import com.example.posdromex.printer.ReceiptPrinter
 import kotlinx.coroutines.delay
@@ -30,13 +38,20 @@ data class CartItem(
     val quantity: Double,
     val unit: String,
     val unitPrice: Double,
-    val conversionRule: String? = null
+    val taxRate: Double = 0.0,
+    val conversionRule: String? = null,
+    val convertedQuantity: Double? = null,
+    val convertedUnit: String? = null
 ) {
-    val total: Double get() = quantity * unitPrice
+    val subtotal: Double get() = quantity * unitPrice
+    val taxAmount: Double get() = subtotal * (taxRate / 100)
+    val total: Double get() = subtotal + taxAmount
 }
 
 data class DeliveryInfoInput(
+    val driverId: Long? = null,
     val driverName: String = "",
+    val truckId: Long? = null,
     val truckPlate: String = "",
     val emptyWeight: String = "",
     val fullWeight: String = "",
@@ -64,6 +79,10 @@ object CurrentSaleState {
 class NewSaleViewModel(
     private val customerDao: CustomerDao,
     private val itemDao: ItemDao,
+    private val categoryDao: CategoryDao,
+    private val driverDao: DriverDao,
+    private val truckDao: TruckDao,
+    private val conversionRuleDao: ConversionRuleDao,
     private val saleDao: SaleDao,
     private val saleItemDao: SaleItemDao,
     private val deliveryInfoDao: DeliveryInfoDao,
@@ -76,6 +95,18 @@ class NewSaleViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val items: StateFlow<List<Item>> = itemDao.getAllItems()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val categories: StateFlow<List<Category>> = categoryDao.getAllCategories()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val drivers: StateFlow<List<Driver>> = driverDao.getAllDrivers()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val trucks: StateFlow<List<Truck>> = truckDao.getAllTrucks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val conversionRules: StateFlow<List<ConversionRule>> = conversionRuleDao.getAllConversionRules()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val settings: StateFlow<AppSettings?> = appSettingsDao.getSettings()
@@ -97,30 +128,71 @@ class NewSaleViewModel(
     val message: StateFlow<String?> = _message.asStateFlow()
 
     val subtotal: Double
-        get() = _cartItems.value.sumOf { it.total }
+        get() = _cartItems.value.sumOf { it.subtotal }
+
+    val taxAmount: Double
+        get() = _cartItems.value.sumOf { it.taxAmount }
+
+    val total: Double
+        get() = subtotal + taxAmount
 
     fun selectCustomer(customer: Customer) {
         _selectedCustomer.value = customer
         CurrentSaleState.selectedCustomer = customer
     }
 
-    fun addToCart(item: Item, quantity: Double, unit: String) {
+    fun addToCart(item: Item, quantity: Double, unit: String, conversion: ConversionRule? = null) {
+        val globalTaxRate = settings.value?.defaultTaxRate ?: 0.0
+        val effectiveTaxRate = if (item.defaultTax > 0) item.defaultTax else globalTaxRate
+
+        var convertedQty: Double? = null
+        var convertedUnit: String? = null
+        if (conversion != null) {
+            convertedQty = if (conversion.operation == "DIVIDE") {
+                quantity / conversion.factor
+            } else {
+                quantity * conversion.factor
+            }
+            convertedUnit = conversion.toUnit
+        }
+
         val cartItem = CartItem(
             name = item.name,
             quantity = quantity,
             unit = unit,
-            unitPrice = item.price
+            unitPrice = item.price,
+            taxRate = effectiveTaxRate,
+            conversionRule = conversion?.name,
+            convertedQuantity = convertedQty,
+            convertedUnit = convertedUnit
         )
         _cartItems.value = _cartItems.value + cartItem
         CurrentSaleState.cartItems = _cartItems.value
     }
 
-    fun addManualItem(name: String, quantity: Double, unit: String, price: Double) {
+    fun addManualItem(name: String, quantity: Double, unit: String, price: Double, conversion: ConversionRule? = null) {
+        val globalTaxRate = settings.value?.defaultTaxRate ?: 0.0
+
+        var convertedQty: Double? = null
+        var convertedUnit: String? = null
+        if (conversion != null) {
+            convertedQty = if (conversion.operation == "DIVIDE") {
+                quantity / conversion.factor
+            } else {
+                quantity * conversion.factor
+            }
+            convertedUnit = conversion.toUnit
+        }
+
         val cartItem = CartItem(
             name = name,
             quantity = quantity,
             unit = unit,
-            unitPrice = price
+            unitPrice = price,
+            taxRate = globalTaxRate,
+            conversionRule = conversion?.name,
+            convertedQuantity = convertedQty,
+            convertedUnit = convertedUnit
         )
         _cartItems.value = _cartItems.value + cartItem
         CurrentSaleState.cartItems = _cartItems.value
@@ -149,7 +221,7 @@ class NewSaleViewModel(
         CurrentSaleState.printBothDocuments = _printBothDocuments.value
     }
 
-    fun printSale() {
+    fun printReceipt() {
         viewModelScope.launch {
             if (!printerService.isConnected()) {
                 _message.value = "Printer not connected"
@@ -169,7 +241,6 @@ class NewSaleViewModel(
 
             val customer = _selectedCustomer.value
             val delivery = _deliveryInfo.value
-            val shouldPrintBoth = _printBothDocuments.value && delivery.hasData()
             val currentTime = System.currentTimeMillis()
 
             // Generate receipt document number
@@ -182,9 +253,9 @@ class NewSaleViewModel(
                 documentNumber = receiptDocNumber,
                 date = currentTime,
                 subtotal = subtotal,
-                tax = 0.0,
+                tax = taxAmount,
                 discount = 0.0,
-                total = subtotal,
+                total = total,
                 status = "CASH"
             )
 
@@ -240,79 +311,109 @@ class NewSaleViewModel(
                 currency = currentSettings.defaultCurrency
             )
 
-            if (receiptResult.isFailure) {
+            if (receiptResult.isSuccess) {
+                _message.value = "Receipt printed: $receiptDocNumber"
+                clearCart()
+            } else {
                 _message.value = "Receipt print failed: ${receiptResult.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
+    fun printDeliveryAuth() {
+        viewModelScope.launch {
+            if (!printerService.isConnected()) {
+                _message.value = "Printer not connected"
                 return@launch
             }
 
-            // If combined printing enabled and delivery info exists, also print delivery authorization
-            if (shouldPrintBoth) {
-                delay(1000) // Wait 1 second between prints for printer to be ready
-
-                // Generate delivery auth document number
-                val deliveryDocNumber = "${currentSettings.deliveryAuthPrefix}${currentSettings.nextDeliveryAuthNumber.toString().padStart(6, '0')}"
-
-                // Create delivery auth sale record
-                val deliveryAuthSale = Sale(
-                    customerId = customer?.id,
-                    type = "DELIVERY_AUTH",
-                    documentNumber = deliveryDocNumber,
-                    date = currentTime,
-                    subtotal = subtotal,
-                    tax = 0.0,
-                    discount = 0.0,
-                    total = subtotal,
-                    status = "CASH"
-                )
-
-                val deliveryAuthSaleId = saleDao.insertSale(deliveryAuthSale)
-
-                // Create sale items for delivery auth
-                val deliveryAuthItems = cartList.map { cartItem ->
-                    SaleItem(
-                        saleId = deliveryAuthSaleId,
-                        productName = cartItem.name,
-                        quantity = cartItem.quantity,
-                        unit = cartItem.unit,
-                        unitPrice = cartItem.unitPrice,
-                        total = cartItem.total,
-                        conversionRuleName = cartItem.conversionRule
-                    )
-                }
-                saleItemDao.insertItems(deliveryAuthItems)
-
-                // Increment delivery auth number
-                appSettingsDao.incrementDeliveryAuthNumber()
-
-                val savedDeliveryAuthSale = saleDao.getSaleById(deliveryAuthSaleId) ?: deliveryAuthSale.copy(id = deliveryAuthSaleId)
-                val savedDeliveryAuthItems = saleItemDao.getItemsBySaleIdSync(deliveryAuthSaleId)
-
-                val printerDeliveryInfo = ReceiptPrinter.DeliveryInfo(
-                    driverName = delivery.driverName,
-                    truckPlate = delivery.truckPlate,
-                    emptyWeight = delivery.emptyWeight.toDoubleOrNull() ?: 0.0,
-                    fullWeight = delivery.fullWeight.toDoubleOrNull() ?: 0.0,
-                    deliveryAddress = delivery.deliveryAddress
-                )
-
-                val deliveryResult = receiptPrinter.printDeliveryAuthorization(
-                    sale = savedDeliveryAuthSale,
-                    items = savedDeliveryAuthItems,
-                    customer = customer,
-                    businessInfo = businessInfo,
-                    deliveryInfo = printerDeliveryInfo
-                )
-
-                if (deliveryResult.isSuccess) {
-                    _message.value = "Printed: $receiptDocNumber & $deliveryDocNumber"
-                } else {
-                    _message.value = "Receipt printed, delivery auth failed: ${deliveryResult.exceptionOrNull()?.message}"
-                }
-            } else {
-                _message.value = "Receipt printed: $receiptDocNumber"
+            val currentSettings = settings.value ?: run {
+                _message.value = "Settings not loaded"
+                return@launch
             }
 
-            clearCart()
+            val cartList = _cartItems.value
+            if (cartList.isEmpty()) {
+                _message.value = "Cart is empty"
+                return@launch
+            }
+
+            val delivery = _deliveryInfo.value
+            if (!delivery.hasData()) {
+                _message.value = "Add delivery info first"
+                return@launch
+            }
+
+            val customer = _selectedCustomer.value
+            val currentTime = System.currentTimeMillis()
+
+            // Generate delivery auth document number
+            val deliveryDocNumber = "${currentSettings.deliveryAuthPrefix}${currentSettings.nextDeliveryAuthNumber.toString().padStart(6, '0')}"
+
+            // Create delivery auth sale record
+            val deliveryAuthSale = Sale(
+                customerId = customer?.id,
+                type = "DELIVERY_AUTH",
+                documentNumber = deliveryDocNumber,
+                date = currentTime,
+                subtotal = subtotal,
+                tax = taxAmount,
+                discount = 0.0,
+                total = total,
+                status = "CASH"
+            )
+
+            val deliveryAuthSaleId = saleDao.insertSale(deliveryAuthSale)
+
+            // Create sale items for delivery auth
+            val deliveryAuthItems = cartList.map { cartItem ->
+                SaleItem(
+                    saleId = deliveryAuthSaleId,
+                    productName = cartItem.name,
+                    quantity = cartItem.quantity,
+                    unit = cartItem.unit,
+                    unitPrice = cartItem.unitPrice,
+                    total = cartItem.total,
+                    conversionRuleName = cartItem.conversionRule
+                )
+            }
+            saleItemDao.insertItems(deliveryAuthItems)
+
+            // Increment delivery auth number
+            appSettingsDao.incrementDeliveryAuthNumber()
+
+            val savedDeliveryAuthSale = saleDao.getSaleById(deliveryAuthSaleId) ?: deliveryAuthSale.copy(id = deliveryAuthSaleId)
+            val savedDeliveryAuthItems = saleItemDao.getItemsBySaleIdSync(deliveryAuthSaleId)
+
+            val businessInfo = ReceiptPrinter.BusinessInfo(
+                name = currentSettings.businessName,
+                phone = currentSettings.businessPhone,
+                location = currentSettings.businessLocation,
+                footer = currentSettings.receiptFooter
+            )
+
+            val printerDeliveryInfo = ReceiptPrinter.DeliveryInfo(
+                driverName = delivery.driverName,
+                truckPlate = delivery.truckPlate,
+                emptyWeight = delivery.emptyWeight.toDoubleOrNull() ?: 0.0,
+                fullWeight = delivery.fullWeight.toDoubleOrNull() ?: 0.0,
+                deliveryAddress = delivery.deliveryAddress
+            )
+
+            val deliveryResult = receiptPrinter.printDeliveryAuthorization(
+                sale = savedDeliveryAuthSale,
+                items = savedDeliveryAuthItems,
+                customer = customer,
+                businessInfo = businessInfo,
+                deliveryInfo = printerDeliveryInfo
+            )
+
+            if (deliveryResult.isSuccess) {
+                _message.value = "Delivery Auth printed: $deliveryDocNumber"
+                clearCart()
+            } else {
+                _message.value = "Delivery auth failed: ${deliveryResult.exceptionOrNull()?.message}"
+            }
         }
     }
 
@@ -324,6 +425,10 @@ class NewSaleViewModel(
 class NewSaleViewModelFactory(
     private val customerDao: CustomerDao,
     private val itemDao: ItemDao,
+    private val categoryDao: CategoryDao,
+    private val driverDao: DriverDao,
+    private val truckDao: TruckDao,
+    private val conversionRuleDao: ConversionRuleDao,
     private val saleDao: SaleDao,
     private val saleItemDao: SaleItemDao,
     private val deliveryInfoDao: DeliveryInfoDao,
@@ -335,8 +440,8 @@ class NewSaleViewModelFactory(
         if (modelClass.isAssignableFrom(NewSaleViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
             return NewSaleViewModel(
-                customerDao, itemDao, saleDao, saleItemDao,
-                deliveryInfoDao, appSettingsDao, printerService, receiptPrinter
+                customerDao, itemDao, categoryDao, driverDao, truckDao, conversionRuleDao,
+                saleDao, saleItemDao, deliveryInfoDao, appSettingsDao, printerService, receiptPrinter
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")

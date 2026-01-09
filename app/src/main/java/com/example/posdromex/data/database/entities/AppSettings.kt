@@ -29,6 +29,9 @@ data class AppSettings(
     val defaultCurrency: String = "USD",
     val exchangeRate: Double = 1.0,
 
+    // Tax Settings
+    val defaultTaxRate: Double = 0.0,
+
     // Backup Settings
     val autoBackupEnabled: Boolean = true,
     val backupRetentionDays: Int = 14,
