@@ -41,7 +41,7 @@ import com.example.posdromex.data.database.entities.Unit
         Driver::class,
         Truck::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class PosDatabase : RoomDatabase() {
@@ -111,6 +111,18 @@ abstract class PosDatabase : RoomDatabase() {
 
                 // Add defaultTaxRate column to app_settings
                 db.execSQL("ALTER TABLE app_settings ADD COLUMN defaultTaxRate REAL NOT NULL DEFAULT 0.0")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Add print count columns to sales table
+                db.execSQL("ALTER TABLE sales ADD COLUMN receiptPrintCount INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE sales ADD COLUMN deliveryAuthPrintCount INTEGER NOT NULL DEFAULT 0")
+
+                // Add converted quantity/unit columns to sale_items table
+                db.execSQL("ALTER TABLE sale_items ADD COLUMN convertedQuantity REAL DEFAULT NULL")
+                db.execSQL("ALTER TABLE sale_items ADD COLUMN convertedUnit TEXT DEFAULT NULL")
             }
         }
     }

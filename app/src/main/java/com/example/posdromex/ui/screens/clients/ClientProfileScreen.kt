@@ -25,6 +25,7 @@ import java.util.*
 fun ClientProfileScreen(
     customerId: Long,
     onNavigateBack: () -> Unit,
+    onNavigateToOrderDetail: (Long) -> Unit = {},
     viewModel: ClientProfileViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
         factory = ClientProfileViewModelFactory(
             customerId = customerId,
@@ -87,7 +88,10 @@ fun ClientProfileScreen(
                     }
                 } else {
                     items(receipts) { receipt ->
-                        SaleListItem(sale = receipt)
+                        SaleListItem(
+                            sale = receipt,
+                            onClick = { onNavigateToOrderDetail(receipt.id) }
+                        )
                     }
                 }
 
@@ -109,7 +113,10 @@ fun ClientProfileScreen(
                     }
                 } else {
                     items(deliveryAuths) { auth ->
-                        SaleListItem(sale = auth)
+                        SaleListItem(
+                            sale = auth,
+                            onClick = { onNavigateToOrderDetail(auth.id) }
+                        )
                     }
                 }
             }
@@ -169,9 +176,10 @@ fun InfoRow(label: String, value: String) {
 }
 
 @Composable
-fun SaleListItem(sale: Sale) {
+fun SaleListItem(sale: Sale, onClick: () -> Unit = {}) {
     Card(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
     ) {
         Column(
             modifier = Modifier
@@ -190,9 +198,14 @@ fun SaleListItem(sale: Sale) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "Total: ${String.format("%.2f", sale.total)}",
+                text = "Total: $${String.format("%.2f", sale.total)}",
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = "Tap to view details",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
             )
         }
     }

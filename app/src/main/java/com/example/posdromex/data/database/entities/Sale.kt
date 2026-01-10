@@ -27,6 +27,8 @@ data class Sale(
     val discount: Double,
     val total: Double,
     val status: String,
-    val notes: String? = null
+    val notes: String? = null,
+    val receiptPrintCount: Int = 0,
+    val deliveryAuthPrintCount: Int = 0
 )
 

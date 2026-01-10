@@ -11,6 +11,7 @@ import com.example.posdromex.ui.screens.categories.CategoriesScreen
 import com.example.posdromex.ui.screens.clients.ClientListScreen
 import com.example.posdromex.ui.screens.clients.ClientProfileScreen
 import com.example.posdromex.ui.screens.conversions.ConversionsScreen
+import com.example.posdromex.ui.screens.orderdetail.OrderDetailScreen
 import com.example.posdromex.ui.screens.drivers.DriversScreen
 import com.example.posdromex.ui.screens.items.ItemsScreen
 import com.example.posdromex.ui.screens.main.MainMenuScreen
@@ -34,6 +35,9 @@ sealed class Screen(val route: String) {
     object Conversions : Screen("conversions")
     data class ClientProfile(val customerId: Long = -1) : Screen("client_profile/{customerId}") {
         fun createRoute(customerId: Long) = "client_profile/$customerId"
+    }
+    data class OrderDetail(val saleId: Long = -1) : Screen("order_detail/{saleId}") {
+        fun createRoute(saleId: Long) = "order_detail/$saleId"
     }
 }
 
@@ -101,6 +105,24 @@ fun NavGraph(
             val customerId = backStackEntry.arguments?.getLong("customerId") ?: -1L
             ClientProfileScreen(
                 customerId = customerId,
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToOrderDetail = { saleId ->
+                    navController.navigate(Screen.OrderDetail().createRoute(saleId))
+                }
+            )
+        }
+
+        composable(
+            route = "order_detail/{saleId}",
+            arguments = listOf(
+                navArgument("saleId") {
+                    type = NavType.LongType
+                }
+            )
+        ) { backStackEntry ->
+            val saleId = backStackEntry.arguments?.getLong("saleId") ?: -1L
+            OrderDetailScreen(
+                saleId = saleId,
                 onNavigateBack = { navController.popBackStack() }
             )
         }

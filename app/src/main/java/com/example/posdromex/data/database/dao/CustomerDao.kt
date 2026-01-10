@@ -12,6 +12,9 @@ interface CustomerDao {
     @Query("SELECT * FROM customers WHERE id = :id")
     fun getCustomerById(id: Long): Flow<Customer?>
 
+    @Query("SELECT * FROM customers WHERE id = :id")
+    suspend fun getCustomerByIdSync(id: Long): Customer?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCustomer(customer: Customer): Long
 

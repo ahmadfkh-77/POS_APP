@@ -43,7 +43,10 @@ data class CartItem(
     val convertedQuantity: Double? = null,
     val convertedUnit: String? = null
 ) {
-    val subtotal: Double get() = quantity * unitPrice
+    // Use converted quantity for pricing when conversion is applied
+    // Price is per converted unit (e.g., $150/meter) when conversion is selected
+    val effectiveQuantity: Double get() = convertedQuantity ?: quantity
+    val subtotal: Double get() = effectiveQuantity * unitPrice
     val taxAmount: Double get() = subtotal * (taxRate / 100)
     val total: Double get() = subtotal + taxAmount
 }
@@ -270,7 +273,9 @@ class NewSaleViewModel(
                     unit = cartItem.unit,
                     unitPrice = cartItem.unitPrice,
                     total = cartItem.total,
-                    conversionRuleName = cartItem.conversionRule
+                    conversionRuleName = cartItem.conversionRule,
+                    convertedQuantity = cartItem.convertedQuantity,
+                    convertedUnit = cartItem.convertedUnit
                 )
             }
             saleItemDao.insertItems(saleItems)
@@ -312,8 +317,10 @@ class NewSaleViewModel(
             )
 
             if (receiptResult.isSuccess) {
+                // Increment print count for tracking ORIGINAL vs COPY
+                saleDao.incrementReceiptPrintCount(receiptSaleId)
                 _message.value = "Receipt printed: $receiptDocNumber"
-                clearCart()
+                // Note: Cart is NOT cleared automatically - use "New Order" button to clear
             } else {
                 _message.value = "Receipt print failed: ${receiptResult.exceptionOrNull()?.message}"
             }
@@ -374,7 +381,9 @@ class NewSaleViewModel(
                     unit = cartItem.unit,
                     unitPrice = cartItem.unitPrice,
                     total = cartItem.total,
-                    conversionRuleName = cartItem.conversionRule
+                    conversionRuleName = cartItem.conversionRule,
+                    convertedQuantity = cartItem.convertedQuantity,
+                    convertedUnit = cartItem.convertedUnit
                 )
             }
             saleItemDao.insertItems(deliveryAuthItems)
@@ -409,8 +418,10 @@ class NewSaleViewModel(
             )
 
             if (deliveryResult.isSuccess) {
+                // Increment print count for tracking ORIGINAL vs COPY
+                saleDao.incrementDeliveryAuthPrintCount(deliveryAuthSaleId)
                 _message.value = "Delivery Auth printed: $deliveryDocNumber"
-                clearCart()
+                // Note: Cart is NOT cleared automatically - use "New Order" button to clear
             } else {
                 _message.value = "Delivery auth failed: ${deliveryResult.exceptionOrNull()?.message}"
             }

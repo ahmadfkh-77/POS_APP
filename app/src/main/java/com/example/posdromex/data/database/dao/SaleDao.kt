@@ -26,5 +26,11 @@ interface SaleDao {
 
     @Delete
     suspend fun deleteSale(sale: Sale)
+
+    @Query("UPDATE sales SET receiptPrintCount = receiptPrintCount + 1 WHERE id = :saleId")
+    suspend fun incrementReceiptPrintCount(saleId: Long)
+
+    @Query("UPDATE sales SET deliveryAuthPrintCount = deliveryAuthPrintCount + 1 WHERE id = :saleId")
+    suspend fun incrementDeliveryAuthPrintCount(saleId: Long)
 }
 

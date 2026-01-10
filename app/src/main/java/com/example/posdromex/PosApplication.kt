@@ -20,7 +20,7 @@ class PosApplication : Application() {
             PosDatabase::class.java,
             PosDatabase.DATABASE_NAME
         )
-            .addMigrations(PosDatabase.MIGRATION_3_4, PosDatabase.MIGRATION_4_5)
+            .addMigrations(PosDatabase.MIGRATION_3_4, PosDatabase.MIGRATION_4_5, PosDatabase.MIGRATION_5_6)
             .fallbackToDestructiveMigration() // Fallback for older versions
             .build()
     }

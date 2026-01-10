@@ -24,6 +24,8 @@ data class SaleItem(
     val unit: String, // "kg", "ton", "m³", etc.
     val unitPrice: Double,
     val total: Double,
-    val conversionRuleName: String? = null // nullable for optional conversions
+    val conversionRuleName: String? = null, // nullable for optional conversions
+    val convertedQuantity: Double? = null,
+    val convertedUnit: String? = null
 )
 

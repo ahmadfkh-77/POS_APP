@@ -32,6 +32,7 @@ class ReceiptPrinter(private val printerService: BluetoothPrinterService) {
 
     /**
      * Print a receipt (WITH prices)
+     * @param isReprint true if this is a reprint (will show COPY instead of ORIGINAL)
      */
     suspend fun printReceipt(
         sale: Sale,
@@ -39,74 +40,94 @@ class ReceiptPrinter(private val printerService: BluetoothPrinterService) {
         customer: Customer?,
         businessInfo: BusinessInfo,
         currency: String = "USD",
-        exchangeRate: Double? = null
+        exchangeRate: Double? = null,
+        isReprint: Boolean = false
     ): Result<Unit> {
         return try {
-            // Header
+            // Initialize printer
             printerService.printRaw(BluetoothPrinterService.ESC_INIT)
-            printerService.printText(businessInfo.name, bold = true, centered = true, doubleSize = true)
+
+            // Header with business info
+            printerService.printText("================================", centered = true)
+            printerService.printText(processArabicText(businessInfo.name), bold = true, centered = true, doubleSize = true)
             if (businessInfo.phone.isNotBlank()) {
                 printerService.printText(businessInfo.phone, centered = true)
             }
             if (businessInfo.location.isNotBlank()) {
-                printerService.printText(businessInfo.location, centered = true)
+                printerService.printText(processArabicText(businessInfo.location), centered = true)
             }
-            printerService.printLine()
+            printerService.printText("================================", centered = true)
+
+            // ORIGINAL or COPY marking
+            val printStatus = if (isReprint) "*** COPY / REPRINT ***" else "*** ORIGINAL ***"
+            printerService.printText(printStatus, bold = true, centered = true)
+            printerService.printText("")
 
             // Document info
             printerService.printText("RECEIPT", bold = true, centered = true)
             printerService.printText("No: ${sale.documentNumber}", centered = true)
             printerService.printText(dateFormat.format(Date(sale.date)), centered = true)
-            printerService.printLine()
+            printerService.printText("================================", centered = true)
 
             // Customer info
             if (customer != null) {
-                printerService.printText("Customer: ${customer.name}")
+                printerService.printText("Customer: ${processArabicText(customer.name)}")
                 if (!customer.phone.isNullOrBlank()) {
                     printerService.printText("Phone: ${customer.phone}")
                 }
+            } else {
+                printerService.printText("Customer: Walk-in")
             }
-            printerService.printLine()
+            printerService.printText("--------------------------------", centered = true)
 
-            // Items
+            // Items - show converted quantity if available
             for (item in items) {
                 // Item name
-                printerService.printText(item.productName, bold = true)
-                // Quantity and unit price
-                val qtyStr = "${formatNumber(item.quantity)} ${item.unit}"
-                val priceStr = "@ ${formatMoney(item.unitPrice)}"
-                printerService.printTwoColumns(qtyStr, priceStr)
-                // Conversion if applicable
-                if (!item.conversionRuleName.isNullOrBlank()) {
-                    printerService.printText("  (${item.conversionRuleName})")
+                printerService.printText(processArabicText(item.productName), bold = true)
+
+                // Show converted quantity and unit if conversion was used
+                if (item.convertedQuantity != null && item.convertedUnit != null) {
+                    // Price is per converted unit
+                    val qtyStr = "${formatNumber(item.convertedQuantity)} ${item.convertedUnit}"
+                    val priceStr = "$${formatMoney(item.unitPrice)}/${item.convertedUnit}"
+                    printerService.printTwoColumns(qtyStr, priceStr)
+                } else {
+                    // No conversion - show original quantity
+                    val qtyStr = "${formatNumber(item.quantity)} ${item.unit}"
+                    val priceStr = "$${formatMoney(item.unitPrice)}/${item.unit}"
+                    printerService.printTwoColumns(qtyStr, priceStr)
                 }
+
                 // Line total
-                printerService.printTwoColumns("", formatMoney(item.total))
+                printerService.printTwoColumns("Line Total:", "$${formatMoney(item.total)}")
             }
-            printerService.printLine()
+            printerService.printText("================================", centered = true)
 
             // Totals
-            printerService.printTwoColumns("Subtotal:", formatMoney(sale.subtotal))
+            printerService.printTwoColumns("Subtotal:", "$${formatMoney(sale.subtotal)}")
             if (sale.discount > 0) {
-                printerService.printTwoColumns("Discount:", "-${formatMoney(sale.discount)}")
+                printerService.printTwoColumns("Discount:", "-$${formatMoney(sale.discount)}")
             }
             if (sale.tax > 0) {
-                printerService.printTwoColumns("Tax:", formatMoney(sale.tax))
+                // Calculate tax percentage from subtotal
+                val taxPercent = if (sale.subtotal > 0) (sale.tax / sale.subtotal * 100).toInt() else 0
+                printerService.printTwoColumns("Tax ($taxPercent%):", "$${formatMoney(sale.tax)}")
             }
-            printerService.printLine()
-            printerService.printText("TOTAL: ${formatMoney(sale.total)} $currency", bold = true)
+            printerService.printText("--------------------------------", centered = true)
+            printerService.printText("TOTAL: $${formatMoney(sale.total)} $currency", bold = true, centered = true)
 
             if (exchangeRate != null && exchangeRate != 1.0) {
-                printerService.printText("Rate: $exchangeRate")
+                printerService.printText("Exchange Rate: $exchangeRate", centered = true)
             }
 
-            // Payment info
-            printerService.printLine()
-            printerService.printText("Payment: ${sale.status}")
+            printerService.printText("================================", centered = true)
+
+            // Payment status
+            printerService.printText("Payment: ${sale.status}", centered = true)
 
             // Footer
-            printerService.printLine()
-            printerService.printText(businessInfo.footer, centered = true)
+            printerService.printText("")
+            printerService.printText(processArabicText(businessInfo.footer), centered = true)
             printerService.feedLines(3)
 
             Result.success(Unit)
@@ -117,35 +138,45 @@ class ReceiptPrinter(private val printerService: BluetoothPrinterService) {
 
     /**
      * Print a Delivery Authorization (NO prices)
+     * @param isReprint true if this is a reprint (will show COPY instead of ORIGINAL)
      */
     suspend fun printDeliveryAuthorization(
         sale: Sale,
         items: List<SaleItem>,
         customer: Customer?,
         businessInfo: BusinessInfo,
-        deliveryInfo: DeliveryInfo
+        deliveryInfo: DeliveryInfo,
+        isReprint: Boolean = false
     ): Result<Unit> {
         return try {
-            // Header
+            // Initialize printer
             printerService.printRaw(BluetoothPrinterService.ESC_INIT)
-            printerService.printText(businessInfo.name, bold = true, centered = true, doubleSize = true)
+
+            // Header with business info
+            printerService.printText("================================", centered = true)
+            printerService.printText(processArabicText(businessInfo.name), bold = true, centered = true, doubleSize = true)
             if (businessInfo.phone.isNotBlank()) {
                 printerService.printText(businessInfo.phone, centered = true)
             }
             if (businessInfo.location.isNotBlank()) {
-                printerService.printText(businessInfo.location, centered = true)
+                printerService.printText(processArabicText(businessInfo.location), centered = true)
             }
-            printerService.printLine()
+            printerService.printText("================================", centered = true)
+
+            // ORIGINAL or COPY marking
+            val printStatus = if (isReprint) "*** COPY / REPRINT ***" else "*** ORIGINAL ***"
+            printerService.printText(printStatus, bold = true, centered = true)
+            printerService.printText("")
 
             // Document info
-            printerService.printText("DELIVERY AUTH", bold = true, centered = true)
+            printerService.printText("DELIVERY AUTHORIZATION", bold = true, centered = true)
             printerService.printText("No: ${sale.documentNumber}", centered = true)
             printerService.printText(dateFormat.format(Date(sale.date)), centered = true)
-            printerService.printLine()
+            printerService.printText("================================", centered = true)
 
             // Customer info
             if (customer != null) {
-                printerService.printText("Customer: ${customer.name}")
+                printerService.printText("Customer: ${processArabicText(customer.name)}")
                 if (!customer.phone.isNullOrBlank()) {
                     printerService.printText("Phone: ${customer.phone}")
                 }
@@ -154,45 +185,52 @@ class ReceiptPrinter(private val printerService: BluetoothPrinterService) {
             // Delivery address
             if (deliveryInfo.deliveryAddress.isNotBlank()) {
                 printerService.printText("Deliver to:")
-                printerService.printText(deliveryInfo.deliveryAddress)
+                printerService.printText(processArabicText(deliveryInfo.deliveryAddress))
             }
-            printerService.printLine()
+            printerService.printText("--------------------------------", centered = true)
 
-            // Materials list (NO PRICES)
+            // Materials list (NO PRICES) - show converted quantity if available
             printerService.printText("MATERIALS:", bold = true)
             for (item in items) {
-                val qtyStr = "${formatNumber(item.quantity)} ${item.unit}"
-                printerService.printTwoColumns(item.productName, qtyStr)
-                if (!item.conversionRuleName.isNullOrBlank()) {
-                    printerService.printText("  (${item.conversionRuleName})")
+                printerService.printText(processArabicText(item.productName), bold = true)
+                // Show converted quantity if available
+                if (item.convertedQuantity != null && item.convertedUnit != null) {
+                    printerService.printTwoColumns("  Quantity:", "${formatNumber(item.convertedQuantity)} ${item.convertedUnit}")
+                    printerService.printTwoColumns("  (Original:", "${formatNumber(item.quantity)} ${item.unit})")
+                } else {
+                    printerService.printTwoColumns("  Quantity:", "${formatNumber(item.quantity)} ${item.unit}")
                 }
             }
-            printerService.printLine()
+            printerService.printText("--------------------------------", centered = true)
 
             // Driver and truck info
+            printerService.printText("TRANSPORT:", bold = true)
             if (deliveryInfo.driverName.isNotBlank()) {
-                printerService.printText("Driver: ${deliveryInfo.driverName}")
+                printerService.printTwoColumns("Driver:", processArabicText(deliveryInfo.driverName))
             }
             if (deliveryInfo.truckPlate.isNotBlank()) {
-                printerService.printText("Truck: ${deliveryInfo.truckPlate}")
+                printerService.printTwoColumns("Truck:", deliveryInfo.truckPlate)
             }
-            printerService.printLine()
+            printerService.printText("--------------------------------", centered = true)
 
             // Weights
             printerService.printText("WEIGHTS:", bold = true)
             printerService.printTwoColumns("Empty:", "${formatNumber(deliveryInfo.emptyWeight)} kg")
             printerService.printTwoColumns("Full:", "${formatNumber(deliveryInfo.fullWeight)} kg")
             val netWeight = deliveryInfo.fullWeight - deliveryInfo.emptyWeight
-            printerService.printTwoColumns("Net:", "${formatNumber(netWeight)} kg")
-            printerService.printLine()
+            printerService.printText("--------------------------------", centered = true)
+            printerService.printTwoColumns("NET WEIGHT:", "${formatNumber(netWeight)} kg")
+            printerService.printText("================================", centered = true)
 
             // Signature lines
+            printerService.printText("")
+            printerService.printText("Driver Signature:", centered = true)
             printerService.feedLines(2)
-            printerService.printLine()
-            printerService.printText("Driver Signature", centered = true)
+            printerService.printText("________________________________", centered = true)
+            printerService.printText("")
+            printerService.printText("Receiver Signature:", centered = true)
             printerService.feedLines(2)
-            printerService.printLine()
-            printerService.printText("Receiver Signature", centered = true)
+            printerService.printText("________________________________", centered = true)
             printerService.feedLines(3)
 
             Result.success(Unit)
@@ -239,5 +277,86 @@ class ReceiptPrinter(private val printerService: BluetoothPrinterService) {
         } else {
             String.format(Locale.US, "%.2f", number)
         }
+    }
+
+    /**
+     * Process Arabic text for thermal printer output
+     * Arabic text needs to be reversed for proper RTL display on ESC/POS printers
+     * Numbers within Arabic text should remain LTR
+     */
+    private fun processArabicText(text: String): String {
+        // Check if text contains Arabic characters
+        if (!containsArabic(text)) {
+            return text
+        }
+
+        // Process the text for RTL display
+        val result = StringBuilder()
+        var currentSegment = StringBuilder()
+        var isCurrentSegmentArabic = false
+
+        for (char in text) {
+            val isArabicChar = isArabicCharacter(char)
+            val isNumber = char.isDigit()
+
+            if (isNumber || char == '.' || char == ' ' || char == '-' || char == ':') {
+                // Numbers, punctuation, and spaces - keep as is within the segment
+                currentSegment.append(char)
+            } else if (isArabicChar) {
+                if (!isCurrentSegmentArabic && currentSegment.isNotEmpty()) {
+                    // Switching from non-Arabic to Arabic - flush LTR segment
+                    result.append(currentSegment)
+                    currentSegment = StringBuilder()
+                }
+                isCurrentSegmentArabic = true
+                currentSegment.append(char)
+            } else {
+                if (isCurrentSegmentArabic && currentSegment.isNotEmpty()) {
+                    // Switching from Arabic to non-Arabic - reverse and flush Arabic segment
+                    result.append(currentSegment.reverse())
+                    currentSegment = StringBuilder()
+                }
+                isCurrentSegmentArabic = false
+                currentSegment.append(char)
+            }
+        }
+
+        // Flush remaining segment
+        if (currentSegment.isNotEmpty()) {
+            if (isCurrentSegmentArabic) {
+                result.append(currentSegment.reverse())
+            } else {
+                result.append(currentSegment)
+            }
+        }
+
+        // If the entire text was Arabic, reverse the whole result for proper display
+        return if (containsArabic(text) && !text.any { !isArabicCharacter(it) && !it.isDigit() && it != ' ' && it != '.' && it != '-' && it != ':' }) {
+            result.reverse().toString()
+        } else {
+            result.toString()
+        }
+    }
+
+    /**
+     * Check if text contains Arabic characters
+     */
+    private fun containsArabic(text: String): Boolean {
+        return text.any { isArabicCharacter(it) }
+    }
+
+    /**
+     * Check if a character is an Arabic character
+     * Arabic Unicode range: U+0600 to U+06FF (Arabic)
+     * Also includes: U+0750 to U+077F (Arabic Supplement)
+     * Also includes: U+FB50 to U+FDFF (Arabic Presentation Forms-A)
+     * Also includes: U+FE70 to U+FEFF (Arabic Presentation Forms-B)
+     */
+    private fun isArabicCharacter(char: Char): Boolean {
+        val code = char.code
+        return (code in 0x0600..0x06FF) ||
+                (code in 0x0750..0x077F) ||
+                (code in 0xFB50..0xFDFF) ||
+                (code in 0xFE70..0xFEFF)
     }
 }

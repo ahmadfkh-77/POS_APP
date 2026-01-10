@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -69,6 +70,7 @@ fun NewSaleScreen(
     var showAddItemDialog by remember { mutableStateOf(false) }
     var showSelectItemDialog by remember { mutableStateOf(false) }
     var showDeliveryInfoDialog by remember { mutableStateOf(false) }
+    var showNewOrderConfirmDialog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val printerConnected = PosApplication.instance.printerService.isConnected()
@@ -87,6 +89,15 @@ fun NewSaleScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    // New Order button - clears current sale
+                    IconButton(
+                        onClick = { showNewOrderConfirmDialog = true },
+                        enabled = cartItems.isNotEmpty() || selectedCustomer != null || deliveryInfo.hasData()
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "New Order")
                     }
                 }
             )
@@ -395,6 +406,30 @@ fun NewSaleScreen(
             onSave = { info ->
                 viewModel.updateDeliveryInfo(info)
                 showDeliveryInfoDialog = false
+            }
+        )
+    }
+
+    // New Order confirmation dialog
+    if (showNewOrderConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showNewOrderConfirmDialog = false },
+            title = { Text("New Order") },
+            text = { Text("Clear current order and start fresh? This will remove all items, customer selection, and delivery info.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearCart()
+                        showNewOrderConfirmDialog = false
+                    }
+                ) {
+                    Text("Clear & Start New")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewOrderConfirmDialog = false }) {
+                    Text("Cancel")
+                }
             }
         )
     }
@@ -739,6 +774,13 @@ private fun DeliveryInfoDialog(
     var driverDropdownExpanded by remember { mutableStateOf(false) }
     var truckDropdownExpanded by remember { mutableStateOf(false) }
 
+    // Weight validation - defined at dialog level so it can be used in confirmButton
+    val emptyWeightNum = emptyWeight.toDoubleOrNull() ?: 0.0
+    val fullWeightNum = fullWeight.toDoubleOrNull() ?: 0.0
+    val netWeight = fullWeightNum - emptyWeightNum
+    val hasWeights = emptyWeight.isNotBlank() && fullWeight.isNotBlank()
+    val isWeightValid = !hasWeights || fullWeightNum > emptyWeightNum
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Delivery Information") },
@@ -845,23 +887,63 @@ private fun DeliveryInfoDialog(
                     )
                 }
 
+                // Weight inputs with validation
                 OutlinedTextField(
                     value = emptyWeight,
                     onValueChange = { emptyWeight = it },
-                    label = { Text("Empty Weight") },
+                    label = { Text("Empty Weight (kg)") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    suffix = { Text("kg") }
                 )
 
                 OutlinedTextField(
                     value = fullWeight,
                     onValueChange = { fullWeight = it },
-                    label = { Text("Full Weight") },
+                    label = { Text("Full Weight (kg)") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    suffix = { Text("kg") }
                 )
+
+                // Net weight display and validation feedback
+                if (hasWeights) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isWeightValid)
+                                MaterialTheme.colorScheme.primaryContainer
+                            else
+                                MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (isWeightValid) {
+                                Text(
+                                    "Net Weight = Full - Empty",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                                Text(
+                                    "NET WEIGHT: ${String.format(Locale.US, "%.2f", netWeight)} kg",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            } else {
+                                Text(
+                                    "Full weight must be greater than empty weight!",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
 
                 OutlinedTextField(
                     value = deliveryAddress,
@@ -887,7 +969,8 @@ private fun DeliveryInfoDialog(
                             deliveryAddress = deliveryAddress
                         )
                     )
-                }
+                },
+                enabled = isWeightValid
             ) {
                 Text("Save")
             }
