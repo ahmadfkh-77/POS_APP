@@ -372,10 +372,18 @@ fun NewSaleScreen(
 
     // Select item from catalog dialog
     if (showSelectItemDialog) {
+        // Calculate net weight if delivery info has weights
+        val netWeight = if (deliveryInfo.emptyWeight.isNotBlank() && deliveryInfo.fullWeight.isNotBlank()) {
+            val empty = deliveryInfo.emptyWeight.toDoubleOrNull() ?: 0.0
+            val full = deliveryInfo.fullWeight.toDoubleOrNull() ?: 0.0
+            if (full > empty) full - empty else null
+        } else null
+
         SelectItemDialog(
             items = items,
             categories = categories,
             conversionRules = conversionRules,
+            netWeight = netWeight,
             onDismiss = { showSelectItemDialog = false },
             onAdd = { item, qty, unit, conversion ->
                 viewModel.addToCart(item, qty, unit, conversion)
@@ -386,8 +394,16 @@ fun NewSaleScreen(
 
     // Add manual item dialog
     if (showAddItemDialog) {
+        // Calculate net weight for manual item dialog as well
+        val manualNetWeight = if (deliveryInfo.emptyWeight.isNotBlank() && deliveryInfo.fullWeight.isNotBlank()) {
+            val empty = deliveryInfo.emptyWeight.toDoubleOrNull() ?: 0.0
+            val full = deliveryInfo.fullWeight.toDoubleOrNull() ?: 0.0
+            if (full > empty) full - empty else null
+        } else null
+
         AddItemDialog(
             conversionRules = conversionRules,
+            netWeight = manualNetWeight,
             onDismiss = { showAddItemDialog = false },
             onAdd = { name, qty, unit, price, conversion ->
                 viewModel.addManualItem(name, qty, unit, price, conversion)
@@ -476,12 +492,15 @@ private fun SelectItemDialog(
     items: List<Item>,
     categories: List<Category>,
     conversionRules: List<ConversionRule>,
+    netWeight: Double? = null,
     onDismiss: () -> Unit,
     onAdd: (item: Item, quantity: Double, unit: String, conversion: ConversionRule?) -> Unit
 ) {
     var selectedItem by remember { mutableStateOf<Item?>(null) }
-    var quantity by remember { mutableStateOf("1") }
-    var unit by remember { mutableStateOf("") }
+    // Auto-fill quantity with net weight if available, otherwise default to 1
+    var quantity by remember { mutableStateOf(netWeight?.let { formatQuantity(it) } ?: "1") }
+    // Use "kg" as unit when net weight is available (linked to weighing scale)
+    var unit by remember { mutableStateOf(if (netWeight != null) "kg" else "") }
     var selectedConversion by remember { mutableStateOf<ConversionRule?>(null) }
     var conversionDropdownExpanded by remember { mutableStateOf(false) }
     var selectedCategoryId by remember { mutableStateOf<Long?>(null) }
@@ -535,7 +554,10 @@ private fun SelectItemDialog(
                             Card(
                                 onClick = {
                                     selectedItem = item
-                                    unit = item.defaultUnit
+                                    // Keep unit as "kg" if using net weight, otherwise use item's default unit
+                                    if (netWeight == null) {
+                                        unit = item.defaultUnit
+                                    }
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -648,11 +670,13 @@ private fun SelectItemDialog(
 @Composable
 private fun AddItemDialog(
     conversionRules: List<ConversionRule>,
+    netWeight: Double? = null,
     onDismiss: () -> Unit,
     onAdd: (name: String, quantity: Double, unit: String, price: Double, conversion: ConversionRule?) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    var quantity by remember { mutableStateOf("1") }
+    // Auto-fill quantity with net weight if available
+    var quantity by remember { mutableStateOf(netWeight?.let { formatQuantity(it) } ?: "1") }
     var unit by remember { mutableStateOf("kg") }
     var price by remember { mutableStateOf("") }
     var selectedConversion by remember { mutableStateOf<ConversionRule?>(null) }
@@ -981,4 +1005,13 @@ private fun DeliveryInfoDialog(
             }
         }
     )
+}
+
+// Helper function to format quantity for display
+private fun formatQuantity(value: Double): String {
+    return if (value == value.toLong().toDouble()) {
+        value.toLong().toString()
+    } else {
+        String.format(Locale.US, "%.2f", value)
+    }
 }

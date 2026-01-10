@@ -87,14 +87,16 @@ class ReceiptPrinter(private val printerService: BluetoothPrinterService) {
 
                 // Show converted quantity and unit if conversion was used
                 if (item.convertedQuantity != null && item.convertedUnit != null) {
-                    // Price is per converted unit
-                    val qtyStr = "${formatNumber(item.convertedQuantity)} ${item.convertedUnit}"
-                    val priceStr = "$${formatMoney(item.unitPrice)}/${item.convertedUnit}"
+                    // Price is per converted unit - normalize unit for printer
+                    val displayUnit = normalizeUnit(item.convertedUnit)
+                    val qtyStr = "${formatNumber(item.convertedQuantity)} $displayUnit"
+                    val priceStr = "$${formatMoney(item.unitPrice)}/$displayUnit"
                     printerService.printTwoColumns(qtyStr, priceStr)
                 } else {
-                    // No conversion - show original quantity
-                    val qtyStr = "${formatNumber(item.quantity)} ${item.unit}"
-                    val priceStr = "$${formatMoney(item.unitPrice)}/${item.unit}"
+                    // No conversion - show original quantity with normalized unit
+                    val displayUnit = normalizeUnit(item.unit)
+                    val qtyStr = "${formatNumber(item.quantity)} $displayUnit"
+                    val priceStr = "$${formatMoney(item.unitPrice)}/$displayUnit"
                     printerService.printTwoColumns(qtyStr, priceStr)
                 }
 
@@ -189,16 +191,17 @@ class ReceiptPrinter(private val printerService: BluetoothPrinterService) {
             }
             printerService.printText("--------------------------------", centered = true)
 
-            // Materials list (NO PRICES) - show converted quantity if available
+            // Materials list (NO PRICES) - show original quantity in kg first, then converted
             printerService.printText("MATERIALS:", bold = true)
             for (item in items) {
                 printerService.printText(processArabicText(item.productName), bold = true)
-                // Show converted quantity if available
+                // Original quantity is always in kg (from net weight)
+                printerService.printTwoColumns("  Quantity:", "${formatNumber(item.quantity)} kg")
+                // Show converted quantity if conversion was applied
                 if (item.convertedQuantity != null && item.convertedUnit != null) {
-                    printerService.printTwoColumns("  Quantity:", "${formatNumber(item.convertedQuantity)} ${item.convertedUnit}")
-                    printerService.printTwoColumns("  (Original:", "${formatNumber(item.quantity)} ${item.unit})")
-                } else {
-                    printerService.printTwoColumns("  Quantity:", "${formatNumber(item.quantity)} ${item.unit}")
+                    // Normalize unit display - replace problematic characters
+                    val displayUnit = normalizeUnit(item.convertedUnit)
+                    printerService.printTwoColumns("  Converted:", "${formatNumber(item.convertedQuantity)} $displayUnit")
                 }
             }
             printerService.printText("--------------------------------", centered = true)
@@ -277,6 +280,26 @@ class ReceiptPrinter(private val printerService: BluetoothPrinterService) {
         } else {
             String.format(Locale.US, "%.2f", number)
         }
+    }
+
+    /**
+     * Normalize unit strings for thermal printer output
+     * Replaces problematic Unicode characters that may print incorrectly
+     * (e.g., superscript characters, Chinese variants)
+     */
+    private fun normalizeUnit(unit: String): String {
+        return unit
+            // Replace various forms of cubic meter with simple "m3"
+            .replace("\u33A5", "m3")      // ㎥ - Square Mq symbol
+            .replace("\u7ACB\u65B9\u7C73", "m3")  // 立方米 - Chinese "cubic meter"
+            .replace("m\u00B3", "m3")     // m³ - m with superscript 3
+            .replace("M\u00B3", "m3")     // M³ - M with superscript 3
+            .replace("\u00B3", "3")       // ³ - just superscript 3
+            .replace("㎥", "m3")          // Another cubic meter symbol
+            // Replace various forms of square meter
+            .replace("\u33A1", "m2")      // ㎡ - Square meter symbol
+            .replace("m\u00B2", "m2")     // m² - m with superscript 2
+            .replace("\u00B2", "2")       // ² - just superscript 2
     }
 
     /**
