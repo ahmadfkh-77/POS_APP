@@ -90,7 +90,7 @@ class ReceiptPrinter(private val printerService: BluetoothPrinterService) {
                     // Price is per converted unit - normalize unit for printer
                     val displayUnit = normalizeUnit(item.convertedUnit)
                     val qtyStr = "${formatNumber(item.convertedQuantity)} $displayUnit"
-                    val priceStr = "$${formatMoney(item.unitPrice)}/$displayUnit"
+                    // val priceStr = "$${formatMoney(item.unitPrice)}/$displayUnit"
                     printerService.printTwoColumns(qtyStr, priceStr)
                 } else {
                     // No conversion - show original quantity with normalized unit
